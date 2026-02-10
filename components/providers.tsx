@@ -30,8 +30,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <header className="flex items-center justify-between gap-2 h-12 px-4 border-b flex-shrink-0 sticky top-0 z-50 bg-background/80 backdrop-blur-xl">
                 <Link href="/" data-testid="link-header-home">
                   <div className="flex items-center gap-2 cursor-pointer">
-                    <Image src="/digitalclaw-pfp.png" alt="DigitalClaw" width={28} height={28} className="rounded-md" />
-                    <span className="font-bold text-sm tracking-tight">DigitalClaw</span>
+                    <Image src="/agentclaw-pfp.png" alt="AgentClaw" width={28} height={28} className="rounded-md" />
+                    <span className="font-bold text-sm tracking-tight">AgentClaw</span>
                   </div>
                 </Link>
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
