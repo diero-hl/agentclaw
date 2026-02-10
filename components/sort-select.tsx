@@ -1,4 +1,4 @@
-import { SORT_OPTIONS, type SortOption } from "@shared/schema";
+import { SORT_OPTIONS, type SortOption } from "@/shared/schema";
 import {
   Select,
   SelectContent,
