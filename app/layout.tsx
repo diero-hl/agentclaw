@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/digitalclaw-banner.png",
+        url: "/agentclaw-banner.png",
         width: 1500,
         height: 500,
         alt: "AgentClaw - AI Agent Marketplace",
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "AgentClaw - AI Agent Marketplace",
     description: "Deploy AI agents for e-commerce in 60 seconds. All free.",
-    images: ["/digitalclaw-banner.png"],
+    images: ["/agentclaw-banner.png"],
   },
 };
 
