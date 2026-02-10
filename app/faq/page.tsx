@@ -10,12 +10,12 @@ interface FaqItem {
 
 const faqs: FaqItem[] = [
   {
-    question: "What is DigitalClaw?",
-    answer: "DigitalClaw is an AI agent marketplace built for Shopify and e-commerce businesses. You can browse, deploy, and chat with specialized AI agents that handle sales, inventory, customer support, marketing, analytics, and more."
+    question: "What is AgentClaw?",
+    answer: "AgentClaw is an AI agent marketplace built for Shopify and e-commerce businesses. You can browse, deploy, and chat with specialized AI agents that handle sales, inventory, customer support, marketing, analytics, and more."
   },
   {
     question: "Are the agents really free?",
-    answer: "Yes, all agents on DigitalClaw are completely free to use. There are no hidden fees, no credit card required, and no usage limits. Just pick an agent and start chatting."
+    answer: "Yes, all agents on AgentClaw are completely free to use. There are no hidden fees, no credit card required, and no usage limits. Just pick an agent and start chatting."
   },
   {
     question: "How do I start using an agent?",
@@ -91,7 +91,7 @@ export default function Faq() {
           <h1 className="text-xl font-bold" data-testid="text-faq-title">Frequently Asked Questions</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Everything you need to know about DigitalClaw and our AI agents.
+          Everything you need to know about AgentClaw and our AI agents.
         </p>
       </div>
 
