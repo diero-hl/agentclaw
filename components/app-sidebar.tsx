@@ -33,7 +33,7 @@ export function AppSidebar() {
             <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
               <Zap className="w-3.5 h-3.5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-sm tracking-tight">AgentClaw</span>
+            <span className="font-bold text-sm tracking-tight">DigitalClaw</span>
           </div>
         </Link>
       </SidebarHeader>
