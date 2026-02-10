@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { storage, chatStorage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL || process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined,
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 export async function POST(
@@ -42,11 +41,7 @@ export async function POST(
     await chatStorage.createMessage(convId, "user", message);
 
     const existingMessages = await chatStorage.getMessagesByConversation(convId);
-    const chatHistory: { role: "system" | "user" | "assistant"; content: string }[] = [];
-
-    if (agent.systemPrompt) {
-      chatHistory.push({ role: "system", content: agent.systemPrompt });
-    }
+    const chatHistory: { role: "user" | "assistant"; content: string }[] = [];
 
     for (const m of existingMessages) {
       chatHistory.push({
@@ -55,10 +50,10 @@ export async function POST(
       });
     }
 
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const stream = anthropic.messages.stream({
+      model: "claude-sonnet-4-20250514",
+      system: agent.systemPrompt || "You are a helpful AI assistant.",
       messages: chatHistory,
-      stream: true,
       max_tokens: 2048,
     });
 
@@ -72,13 +67,15 @@ export async function POST(
             encoder.encode(`data: ${JSON.stringify({ type: "conversation_id", data: convId })}\n\n`)
           );
 
-          for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) {
-              fullResponse += content;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "content", data: content })}\n\n`)
-              );
+          for await (const event of stream) {
+            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              const content = event.delta.text;
+              if (content) {
+                fullResponse += content;
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: "content", data: content })}\n\n`)
+                );
+              }
             }
           }
 
