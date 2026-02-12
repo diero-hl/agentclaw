@@ -1,0 +1,25 @@
+[Unit]
+Description=Agentclaw OpenClaw Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/.openclaw
+ExecStart=/usr/bin/openclaw start --daemon
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+
+# Save this as: /etc/systemd/system/agentclaw.service
+# Then run:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable agentclaw
+#   sudo systemctl start agentclaw
+#
+# Check status:
+#   sudo systemctl status agentclaw
+#   journalctl -u agentclaw -f
