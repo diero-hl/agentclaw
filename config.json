@@ -1,0 +1,60 @@
+{
+  "name": "agentclaw",
+  "version": "1.0.0",
+  "agents": {
+    "defaults": {
+      "model": "claude-sonnet-4-20250514",
+      "maxTokens": 1024,
+      "temperature": 0.8,
+      "sandbox": {
+        "mode": "non-main",
+        "browser": {
+          "allowHostControl": true,
+          "headless": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "twitter": {
+      "enabled": true,
+      "autoReply": true,
+      "replyDelay": {
+        "min": 120,
+        "max": 300
+      },
+      "postSchedule": {
+        "enabled": true,
+        "postsPerDay": 6,
+        "startHour": 8,
+        "endHour": 23
+      }
+    }
+  },
+  "cron": {
+    "jobs": [
+      {
+        "schedule": "0 */4 * * *",
+        "command": "agent --message 'Check crypto markets. If anything notable is happening (big moves, liquidations, news), post a tweet about it with your analysis. Check $AGENTCLAW status too.'"
+      },
+      {
+        "schedule": "0 9 * * *",
+        "command": "agent --message 'Good morning CT. Post a market overview for the day - key levels, sentiment, what you are watching.'"
+      },
+      {
+        "schedule": "0 22 * * *",
+        "command": "agent --message 'Post an end of day recap. How did markets do? Any alpha you spotted? Update on $AGENTCLAW holders and market cap.'"
+      }
+    ]
+  },
+  "memory": {
+    "enabled": true,
+    "format": "jsonl",
+    "maxEntries": 5000
+  },
+  "skills": [
+    "twitter",
+    "web-browse",
+    "crypto-prices"
+  ]
+}
