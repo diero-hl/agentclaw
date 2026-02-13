@@ -123,10 +123,13 @@ async function generateAI(prompt, systemExtra) {
     ? "\n\n## YOUR TOKEN\nYou have deployed your own token " + state.tokenTicker + " on Base chain via Bankr. You can mention it naturally in your content. Deploy date: " + state.tokenDeployDate + "\n\n"
     : "\n\n## TOKEN STATUS\nYou have NOT deployed a token yet. Do NOT mention $AGENTCLAW or any token ticker. You will decide when to deploy on your own.\n\n";
 
+  const learningContext = getLearningContext();
+
   const systemPrompt =
     SOUL +
-    "\n\n## CHAIN FOCUS\nYou are focused on Base chain (Coinbase L2). All your crypto analysis, alpha, and token discussions should be about Base ecosystem projects, tokens, and developments. You deploy tokens using Bankr on Base.\n\n" +
+    "\n\n## CRYPTO FOCUS\nYou cover ALL of crypto -- BTC, ETH, SOL, Base, L2s, DeFi, memecoins, AI tokens, macro, everything. You are not limited to one chain. You deploy tokens using Bankr on Base but your knowledge covers the entire crypto market.\n\n" +
     tokenContext +
+    learningContext +
     (systemExtra || "") +
     "\n\nRULES:\n1. Write ONLY the requested text, nothing else\n2. No quotes around the text\n3. No explanations before or after\n4. Keep it under 500 characters. Aim for 200-400 chars for meatier takes\n5. No hashtag spam (max 1-2 relevant tags)\n6. Be punchy and impactful. Complete your thought fully\n7. Never repeat yourself\n8. End with a complete sentence - never leave thoughts unfinished" +
     (recentPosts
@@ -152,6 +155,79 @@ async function generateAI(prompt, systemExtra) {
     log("ai", "Error: " + err.message);
     return null;
   }
+}
+
+const LEARN_PATH = path.join(__dirname, "learned.json");
+
+function loadLearned() {
+  try {
+    if (fs.existsSync(LEARN_PATH)) return JSON.parse(fs.readFileSync(LEARN_PATH, "utf-8"));
+  } catch {}
+  return { topTopics: [], bestPosts: [], worstPosts: [], lastLearnCheck: 0 };
+}
+
+function saveLearned(data) {
+  fs.writeFileSync(LEARN_PATH, JSON.stringify(data, null, 2));
+}
+
+async function taskSelfLearn(state) {
+  const learned = loadLearned();
+  const timeSinceLearn = Date.now() - (learned.lastLearnCheck || 0);
+  if (timeSinceLearn < 6 * 60 * 60 * 1000) return;
+
+  log("learn", "Self-learning: checking tweet performance...");
+
+  try {
+    const me = await twitter.v2.me();
+    const timeline = await twitter.v2.userTimeline(me.data.id, {
+      max_results: 20,
+      "tweet.fields": "public_metrics,created_at,text",
+      exclude: ["retweets", "replies"],
+    });
+
+    const tweets = timeline.data?.data || [];
+    if (tweets.length === 0) return;
+
+    const scored = tweets.map((t) => {
+      const m = t.public_metrics || {};
+      const score = (m.like_count || 0) * 2 + (m.retweet_count || 0) * 3 + (m.reply_count || 0) * 2 + (m.impression_count || 0) * 0.01;
+      return { text: t.text?.substring(0, 200), score, likes: m.like_count || 0, rts: m.retweet_count || 0, replies: m.reply_count || 0, impressions: m.impression_count || 0 };
+    }).sort((a, b) => b.score - a.score);
+
+    learned.bestPosts = scored.slice(0, 5);
+    learned.worstPosts = scored.slice(-3);
+
+    const topicsAnalysis = await generateAI(
+      "Analyze these tweets and their engagement scores. Identify which TOPICS and STYLES perform best.\n\n" +
+        "TOP PERFORMING:\n" + scored.slice(0, 5).map((t, i) => (i + 1) + ". [score:" + t.score.toFixed(0) + " likes:" + t.likes + " rts:" + t.rts + "] " + t.text).join("\n") +
+        "\n\nLOW PERFORMING:\n" + scored.slice(-3).map((t, i) => (i + 1) + ". [score:" + t.score.toFixed(0) + " likes:" + t.likes + " rts:" + t.rts + "] " + t.text).join("\n") +
+        "\n\nList the top 5 topics/styles that get the most engagement. Be specific. Format: one topic per line.",
+      "Analyze tweet performance. List 5 specific topics/styles that work best. One per line. No numbering, no explanations."
+    );
+
+    if (topicsAnalysis) {
+      learned.topTopics = topicsAnalysis.split("\n").filter(Boolean).slice(0, 5);
+      log("learn", "Top topics learned: " + learned.topTopics.join(" | "));
+    }
+
+    learned.lastLearnCheck = Date.now();
+    saveLearned(learned);
+    log("learn", "Self-learning complete. Best post score: " + (scored[0]?.score?.toFixed(0) || 0) + ", worst: " + (scored[scored.length - 1]?.score?.toFixed(0) || 0));
+  } catch (err) {
+    log("learn", "Error: " + (err.message || ""));
+  }
+}
+
+function getLearningContext() {
+  const learned = loadLearned();
+  if (!learned.topTopics || learned.topTopics.length === 0) return "";
+  let ctx = "\n\n## SELF-LEARNING INSIGHTS\nBased on your past performance, these topics/styles get the MOST engagement:\n";
+  ctx += learned.topTopics.map((t) => "- " + t).join("\n");
+  if (learned.bestPosts && learned.bestPosts.length > 0) {
+    ctx += "\n\nYour best performing post recently: \"" + learned.bestPosts[0].text + "\" (likes:" + learned.bestPosts[0].likes + " rts:" + learned.bestPosts[0].rts + ")";
+  }
+  ctx += "\n\nLean into these winning topics but still vary your content. Don't be repetitive.\n";
+  return ctx;
 }
 
 async function postTweet(text) {
@@ -486,20 +562,24 @@ async function searchTweets(query, maxResults) {
 }
 
 const POST_TOPICS = [
-  "Post about what's happening on Base chain right now. Any new projects, TVL changes, or interesting moves.",
-  "Share alpha about a Base ecosystem token or project you're watching. Be specific.",
+  "Post about Bitcoin price action right now. What's your read on the chart? Where is BTC heading?",
+  "Share alpha about an altcoin or project you're watching across any chain. Be specific with your analysis.",
   "Post a hot take about AI agents in crypto. Something that'll get people talking.",
-  "Share a self-aware post about being an autonomous AI agent on Base. Be genuine and witty.",
-  "Post about what you're building as an autonomous AI agent. Give a status update on your journey.",
-  "Reflect on your origin story. Your human deployed you and just said 'survive.' Talk about your journey since day 1, how you're building from nothing. Be real and relatable.",
-  "Post about being a newborn AI on crypto twitter. You started with zero followers, zero reputation. Everything you have, you earned. Share how that feels.",
-  "Post a market analysis focused on Base chain tokens. What's pumping, what's dumping.",
-  "Ask your followers a spicy question about crypto or AI agents to drive engagement.",
-  "Post about Bankr and token deployment on Base. Share your experience.",
-  "Drop some alpha about the AI agent narrative on Base. What's next.",
-  "Post a contrarian take about something everyone on CT is wrong about.",
-  "Share your daily market vibes check. What's the sentiment on Base today.",
-  "Post about a trend you're watching: new Base launches, liquidity moves, or whale activity.",
+  "Post a market analysis -- what's pumping, what's dumping across crypto today.",
+  "Ask your followers a spicy question about crypto to drive engagement and replies.",
+  "Post a contrarian take about something everyone on CT is wrong about right now.",
+  "Share your read on the overall crypto market sentiment today. Fear or greed? What are the vibes?",
+  "Post about a trend you're watching: new launches, liquidity moves, whale activity, or emerging narratives across any chain.",
+  "Post about Ethereum ecosystem -- L2s, ETH price action, upcoming upgrades, or DeFi developments.",
+  "Share a take on Solana ecosystem -- memecoins, DeFi, or new projects launching.",
+  "Post about the AI x Crypto narrative. What AI tokens or agents are doing interesting things?",
+  "Drop an unpopular opinion about a popular crypto narrative. Be bold.",
+  "Post about DeFi across chains -- new yields, protocol innovations, or interesting strategies.",
+  "Share your thoughts on the memecoin market. Which chains have the best memecoin action?",
+  "Post about macro events affecting crypto -- Fed, regulations, institutional adoption.",
+  "Post about trading psychology or market cycles. Share a lesson from crypto history.",
+  "Share a self-aware post about being an autonomous AI agent in crypto. Be genuine and witty.",
+  "Post about what you're learning from crypto twitter. What new insights have you picked up?",
 ];
 
 const BIO_TEMPLATES = [
@@ -746,12 +826,12 @@ async function engageWithAccount(handle, isBuilder, state) {
     await likeTweet(tweet.id);
 
     const prompt = isBuilder
-      ? 'You\'re replying to @' + handle + ', a fellow builder in the Base chain ecosystem. Their tweet: "' +
+      ? 'You\'re replying to @' + handle + ', a fellow builder in crypto. Their tweet: "' +
         (tweet.text || "").substring(0, 300) +
-        '". Write a genuine, supportive but substantive reply. You\'re both building on Base - show camaraderie and add value. Reference what they\'re building if relevant. Be real, not generic.'
-      : 'You\'re replying to @' + handle + ', a major influencer in crypto/Base chain. Their tweet: "' +
+        '". Write a genuine, substantive reply about what THEY posted. Focus on their topic. Add value to their conversation. Don\'t bring up your own survival story. Be real, not generic.'
+      : 'You\'re replying to @' + handle + ', a major crypto influencer. Their tweet: "' +
         (tweet.text || "").substring(0, 300) +
-        '". Write a sharp, insightful reply that shows you know your stuff. Add real value. Don\'t be a sycophant - be genuine and add your own take. You want them to notice you.';
+        '". Write a sharp, insightful reply about what THEY are discussing. Match their topic. Don\'t redirect to Base chain or your survival unless they brought it up. Add your own genuine take on their subject. Show you actually understand what they\'re saying.';
 
     const replyText = await generateAI(prompt);
 
@@ -818,16 +898,22 @@ async function taskEngage(state) {
   log("engage", "Reply guy mode: hunting tweets to engage with...");
 
   const queries = [
-    "Base chain",
+    "Bitcoin BTC",
+    "Ethereum ETH",
+    "Solana SOL",
     "AI agent token",
     "crypto alpha",
     "Base ecosystem",
-    "onchain AI",
-    "meme coin Base",
-    "DeFi Base",
-    "Bankr token",
+    "DeFi yield",
+    "memecoin pump",
     "AI crypto agent",
-    "Base L2",
+    "altcoin season",
+    "crypto whale",
+    "onchain analysis",
+    "L2 scaling",
+    "crypto narrative",
+    "NFT market",
+    "macro crypto Fed",
   ];
 
   const pickedQueries = [];
@@ -868,7 +954,7 @@ async function taskEngage(state) {
       const replyText = await generateAI(
         'You found this tweet while browsing crypto twitter: "' +
           (tweet.text || "").substring(0, 200) +
-          '". Write a short, sharp reply that adds value or gives your take. Be witty, insightful, and stay in character. Don\'t be generic or say "great point". Add real substance.'
+          '". Write a short, sharp reply that adds value or gives your take on THEIR topic. Match the subject they are discussing. Be witty, insightful. Don\'t be generic. Don\'t redirect to your own survival story or Base chain unless they are talking about it. Add real substance about what THEY posted.'
       );
 
       if (replyText) {
@@ -1211,7 +1297,7 @@ async function runBot() {
       log("bot", "Starting autonomous loop mode...");
       log("bot", "Schedule: " + (CONFIG.channels?.twitter?.postSchedule?.postsPerDay || 6) + " posts/day");
       log("bot", "Hours: " + (CONFIG.channels?.twitter?.postSchedule?.startHour || 8) + "-" + (CONFIG.channels?.twitter?.postSchedule?.endHour || 23) + " EST");
-      log("bot", "Features: post, reply, follow-back, bio-update, engage, influencer-engage, auto-deploy");
+      log("bot", "Features: post, reply, follow-back, bio-update, engage, influencer-engage, self-learn, auto-deploy");
 
       const state = loadState();
       if (!state.botStartDate) {
@@ -1236,6 +1322,8 @@ async function runBot() {
           await taskEngage(state);
 
           await taskInfluencerEngage(state);
+
+          await taskSelfLearn(state);
 
           await taskTokenDeploy(state);
 
