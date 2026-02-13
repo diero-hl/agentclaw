@@ -1,0 +1,36 @@
+{
+  "name": "agentclaw",
+  "version": "2.0.0",
+  "agents": {
+    "defaults": {
+      "model": "claude-sonnet-4-20250514",
+      "maxTokens": 1024,
+      "temperature": 0.8
+    }
+  },
+  "channels": {
+    "twitter": {
+      "enabled": true,
+      "autoReply": true,
+      "replyDelay": {
+        "min": 120,
+        "max": 300
+      },
+      "postSchedule": {
+        "enabled": true,
+        "postsPerDay": 12,
+        "startHour": 8,
+        "endHour": 23
+      },
+      "autoFollow": true,
+      "bioUpdate": true
+    }
+  },
+  "chain": "base",
+  "tokenDeployment": "bankr",
+  "memory": {
+    "enabled": true,
+    "format": "jsonl",
+    "maxEntries": 5000
+  }
+}
