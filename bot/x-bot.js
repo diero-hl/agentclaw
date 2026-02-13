@@ -634,7 +634,7 @@ async function taskPost(state) {
 
 async function taskReply(state) {
   const timeSinceCheck = Date.now() - state.lastReplyCheck;
-  if (timeSinceCheck < 5 * 60 * 1000) {
+  if (timeSinceCheck < 15 * 60 * 1000) {
     log("reply", "Checked recently. Skipping.");
     return;
   }
@@ -643,7 +643,7 @@ async function taskReply(state) {
   const mentions = await getMentions();
   log("reply", "Found " + mentions.length + " new mention(s)");
 
-  for (const mention of mentions.slice(0, 8)) {
+  for (const mention of mentions.slice(0, 3)) {
     const author = await getUserInfo(mention.author_id);
     const followers = author?.public_metrics?.followers_count || 0;
     const isPremium = author?.verified === true || author?.verified_type === "blue";
@@ -844,11 +844,10 @@ async function engageWithAccount(handle, isBuilder, state) {
       if (state.engagedTweets.length > 500) state.engagedTweets = state.engagedTweets.slice(-300);
       saveState(state);
 
-      const rtChance = isBuilder ? "40-50%" : "30-40%";
       const shouldRT = await generateAI(
         'You saw this tweet from @' + handle + ' (' + label + '): "' + (tweet.text || "").substring(0, 300) +
-        '"\n\nShould you retweet this to your followers? RT if it has valuable alpha, important news, project updates, or insightful takes. Reply ONLY "RT" or "SKIP".',
-        'Answer with exactly one word: RT or SKIP. RT about ' + rtChance + ' of quality ' + label + ' tweets.'
+        '"\n\nShould you retweet this to your followers? RT if it has valuable content, alpha, news, or interesting takes. Reply ONLY "RT" or "SKIP".',
+        'Answer with exactly one word: RT or SKIP. RT about 60-70% of tweets from builders and influencers. Be generous with RTs.'
       );
       if (shouldRT && shouldRT.trim().toUpperCase() === "RT") {
         await retweetTweet(tweet.id);
@@ -891,11 +890,61 @@ async function taskInfluencerEngage(state) {
   saveState(state);
 }
 
+async function taskRetweetScan(state) {
+  const timeSinceCheck = Date.now() - (state.lastRTScan || 0);
+  if (timeSinceCheck < 20 * 60 * 1000) return;
+
+  log("rt-scan", "Scanning for good content to retweet...");
+
+  const rtQueries = ["crypto alpha", "Bitcoin analysis", "DeFi alpha", "onchain data", "AI agent crypto", "memecoin launch", "Ethereum L2", "crypto whale move"];
+  const query = rtQueries[Math.floor(Math.random() * rtQueries.length)];
+
+  const tweets = await searchTweets(query, 10);
+  let retweeted = 0;
+
+  for (const tweet of tweets) {
+    if (retweeted >= 2) break;
+
+    const author = tweet._author || await getUserInfo(tweet.author_id);
+    const followers = author?.public_metrics?.followers_count || 0;
+    const isPremium = author?.verified === true || author?.verified_type === "blue";
+
+    if (!isPremium || followers < 500) continue;
+
+    const me = await twitter.v2.me();
+    if (tweet.author_id === me.data?.id) continue;
+
+    if (state.engagedTweets && state.engagedTweets.includes(tweet.id)) continue;
+
+    const shouldRT = await generateAI(
+      'You found this tweet from @' + (author?.username || '?') + ' (' + followers + ' followers): "' + (tweet.text || "").substring(0, 300) +
+      '"\n\nIs this worth retweeting? RT if it has genuine alpha, breaking news, smart analysis, or valuable insights about crypto. Reply ONLY "RT" or "SKIP".',
+      'Answer with exactly one word: RT or SKIP. RT about 40-50% of quality tweets.'
+    );
+
+    if (shouldRT && shouldRT.trim().toUpperCase() === "RT") {
+      await retweetTweet(tweet.id);
+      await likeTweet(tweet.id);
+      if (!state.engagedTweets) state.engagedTweets = [];
+      state.engagedTweets.push(tweet.id);
+      if (state.engagedTweets.length > 500) state.engagedTweets = state.engagedTweets.slice(-300);
+      state.totalRetweets = (state.totalRetweets || 0) + 1;
+      retweeted++;
+      log("rt-scan", "Retweeted @" + (author?.username || "?") + ": " + (tweet.text || "").substring(0, 60));
+      await new Promise((r) => setTimeout(r, 3000 + Math.random() * 5000));
+    }
+  }
+
+  log("rt-scan", "RT scan done: retweeted " + retweeted + " tweet(s)");
+  state.lastRTScan = Date.now();
+  saveState(state);
+}
+
 async function taskEngage(state) {
   const timeSinceCheck = Date.now() - (state.lastEngageCheck || 0);
-  if (timeSinceCheck < 10 * 60 * 1000) return;
+  if (timeSinceCheck < 30 * 60 * 1000) return;
 
-  log("engage", "Reply guy mode: hunting tweets to engage with...");
+  log("engage", "Hunting tweets to engage with...");
 
   const queries = [
     "Bitcoin BTC",
@@ -929,8 +978,8 @@ async function taskEngage(state) {
     const tweets = await searchTweets(query, 10);
     log("engage", "Found " + tweets.length + " tweets for '" + query + "'");
 
-    for (const tweet of tweets.slice(0, 8)) {
-      if (totalEngaged >= 5) break;
+    for (const tweet of tweets.slice(0, 5)) {
+      if (totalEngaged >= 2) break;
 
       const me = await twitter.v2.me();
       if (tweet.author_id === me.data?.id) continue;
@@ -965,11 +1014,11 @@ async function taskEngage(state) {
         state.engagedTweets.push(tweet.id);
         if (state.engagedTweets.length > 500) state.engagedTweets = state.engagedTweets.slice(-300);
 
-        if (followers >= 1000) {
+        if (followers >= 500) {
           const shouldRT = await generateAI(
             'You saw this tweet from a verified account with ' + followers + ' followers: "' + (tweet.text || "").substring(0, 300) +
-            '"\n\nShould you retweet this to your followers? Only RT if it has genuinely valuable alpha, insight, news about Base chain, or is from a notable figure. Don\'t RT low-effort or spam posts. Reply ONLY "RT" or "SKIP".',
-            'Answer with exactly one word: RT or SKIP. RT roughly 25-30% of quality crypto tweets you engage with.'
+            '"\n\nShould you retweet this to your followers? RT if it has valuable alpha, insight, news, or interesting takes about crypto. Reply ONLY "RT" or "SKIP".',
+            'Answer with exactly one word: RT or SKIP. RT about 50-60% of quality crypto tweets you engage with. Be generous with RTs.'
           );
           if (shouldRT && shouldRT.trim().toUpperCase() === "RT") {
             await retweetTweet(tweet.id);
@@ -1312,6 +1361,8 @@ async function runBot() {
           log("loop", "--- Cycle start ---");
 
           await taskPost(state);
+
+          await taskRetweetScan(state);
 
           await taskReply(state);
 
